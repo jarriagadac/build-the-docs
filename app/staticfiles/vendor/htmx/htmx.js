@@ -82,7 +82,7 @@ return (function () {
                 sock.binaryType = htmx.config.wsBinaryType;
                 return sock;
             },
-            version: "1.9.0"
+            version: "1.9.2"
         };
 
         /** @type {import("./htmx").HtmxInternalApi} */
@@ -430,6 +430,23 @@ return (function () {
                 return true;
             } catch(e) {
                 return false;
+            }
+        }
+
+        function normalizePath(path) {
+            try {
+                var url = new URL(path);
+                if (url) {
+                    path = url.pathname + url.search;
+                }
+                // remove trailing slash, unless index page
+                if (!path.match('^/$')) {
+                    path = path.replace(/\/+$/, '');
+                }
+                return path;
+            } catch (e) {
+                // be kind to IE11, which doesn't support URL()
+                return path;
             }
         }
 
@@ -904,8 +921,9 @@ return (function () {
                 });
             }
             if (internalData.onHandlers) {
-                for (var eventName of internalData.onHandlers) {
-                    element.removeEventListener(eventName, internalData.onHandlers[eventName]);
+                for (let i = 0; i < internalData.onHandlers.length; i++) {
+                    const handlerInfo = internalData.onHandlers[i];
+                    element.removeEventListener(handlerInfo.name, handlerInfo.handler);
                 }
             }
         }
@@ -1301,7 +1319,7 @@ return (function () {
                 var verb, path;
                 if (elt.tagName === "A") {
                     verb = "get";
-                    path = getRawAttribute(elt, 'href');
+                    path = elt.href; // DOM property gives the fully resolved href of a relative link
                 } else {
                     var rawAttribute = getRawAttribute(elt, "method");
                     verb = rawAttribute ? rawAttribute.toLowerCase() : "get";
@@ -1722,13 +1740,6 @@ return (function () {
                     });
                 }
             });
-            if (!explicitAction && hasAttribute(elt, 'hx-trigger')) {
-                explicitAction = true
-                triggerSpecs.forEach(function(triggerSpec) {
-                    // For "naked" triggers, don't do anything at all
-                    addTriggerHandler(elt, triggerSpec, nodeData, function () { })
-                })
-            }
             return explicitAction;
         }
 
@@ -1857,12 +1868,12 @@ return (function () {
 
         function addHxOnEventHandler(elt, eventName, code) {
             var nodeData = getInternalData(elt);
-            nodeData.onHandlers ||= {};
+            nodeData.onHandlers = [];
             var func = new Function("event", code + "; return;");
             var listener = elt.addEventListener(eventName, function (e) {
                 return func.call(elt, e);
             });
-            nodeData.onHandlers[eventName] = listener;
+            nodeData.onHandlers.push({event:eventName, listener:listener});
             return {nodeData, code, func, listener};
         }
 
@@ -1913,10 +1924,18 @@ return (function () {
                 }
 
                 var triggerSpecs = getTriggerSpecs(elt);
-                var explicitAction = processVerbs(elt, nodeData, triggerSpecs);
+                var hasExplicitHttpAction = processVerbs(elt, nodeData, triggerSpecs);
 
-                if (!explicitAction && getClosestAttributeValue(elt, "hx-boost") === "true") {
-                    boostElement(elt, nodeData, triggerSpecs);
+                if (!hasExplicitHttpAction) {
+                    if (getClosestAttributeValue(elt, "hx-boost") === "true") {
+                        boostElement(elt, nodeData, triggerSpecs);
+                    } else if (hasAttribute(elt, 'hx-trigger')) {
+                        triggerSpecs.forEach(function (triggerSpec) {
+                            // For "naked" triggers, don't do anything at all
+                            addTriggerHandler(elt, triggerSpec, nodeData, function () {
+                            })
+                        })
+                    }
                 }
 
                 if (elt.tagName === "FORM") {
@@ -2037,6 +2056,8 @@ return (function () {
                 return;
             }
 
+            url = normalizePath(url);
+
             var historyCache = parseJSON(localStorage.getItem("htmx-history-cache")) || [];
             for (var i = 0; i < historyCache.length; i++) {
                 if (historyCache[i].url === url) {
@@ -2065,6 +2086,8 @@ return (function () {
             if (!canAccessLocalStorage()) {
                 return null;
             }
+
+            url = normalizePath(url);
 
             var historyCache = parseJSON(localStorage.getItem("htmx-history-cache")) || [];
             for (var i = 0; i < historyCache.length; i++) {
@@ -3515,6 +3538,7 @@ return (function () {
                     internalData.xhr.abort();
                 }
             });
+            var originalPopstate = window.onpopstate;
             window.onpopstate = function (event) {
                 if (event.state && event.state.htmx) {
                     restoreHistory();
@@ -3524,6 +3548,10 @@ return (function () {
                             'triggerEvent': triggerEvent
                         });
                     });
+                } else {
+                    if (originalPopstate) {
+                        originalPopstate(event);
+                    }
                 }
             };
             setTimeout(function () {
