@@ -11,7 +11,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY app/ .
-COPY django_sso/app/sso/ sso/
 
 RUN pip install --upgrade pip \
     && pip install -r _requirements/base.txt -r _requirements/develop.txt

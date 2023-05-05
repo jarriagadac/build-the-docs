@@ -1,20 +1,20 @@
 # makefile
 
 build:
-	docker-compose --file dc-produccion.yml --project-name django-boilerplate up -d --build --force-recreate --remove-orphans
+	docker-compose --file dc-produccion.yml --project-name build_the_docs up -d --build --force-recreate --remove-orphans
 	docker ps
 
 _build:
-	docker-compose --project-name django_boilerplate up -d --build --force-recreate --remove-orphans
+	docker-compose --project-name django_build_the_docs up -d --build --force-recreate --remove-orphans
 	make _migrate
-	docker exec django_boilerplate make precommit
+	docker exec django_build_the_docs make precommit
 	docker ps
 
 _admin:
-	docker exec django_boilerplate bash -c "echo \"from django.contrib.auth.models import User; User.objects.create_superuser('admin', '', 'admin')\" | python manage.py shell"
+	docker exec django_build_the_docs bash -c "echo \"from django.contrib.auth.models import User; User.objects.create_superuser('admin', '', 'admin')\" | python manage.py shell"
 
 restart:
-	docker restart django_boilerplate
+	docker restart django_build_the_docs
 	docker ps
 
 update:
@@ -24,22 +24,22 @@ update:
 	git stash pop
 
 _static:
-	docker exec django_boilerplate python manage.py collectstatic --no-input
+	docker exec django_build_the_docs python manage.py collectstatic --no-input
 
 media:
-	sudo cp -r ../media/* /home/instalar/media/django_boilerplate
+	sudo cp -r ../media/* /home/instalar/media/django_build_the_docs
 
 _migrate:
-	docker exec django_boilerplate python manage.py migrate
+	docker exec django_build_the_docs python manage.py migrate
 
 loaddata:
-	docker exec django_boilerplate make loaddata
+	docker exec django_build_the_docs make loaddata
 
 logs:
-	docker logs -f django_boilerplate
+	docker logs -f django_build_the_docs
 
 ssh:
-	docker exec -it django_boilerplate bash
+	docker exec -it django_build_the_docs bash
 
 deploy:
 	make update
